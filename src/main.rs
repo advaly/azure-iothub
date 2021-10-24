@@ -12,7 +12,6 @@ use std::env;
 use std::fs;
 use std::io::prelude::*;
 use std::process;
-use std::str;
 use std::panic;
 
 #[derive(Deserialize, Debug)]
@@ -231,7 +230,7 @@ async fn c2d(callback: &str, dmsg_path: &str, interval: u64, mut client: IoTHubC
         // Exit the process silently with exit code 9 at ping panic
         if let Some(msg) = panic_info.payload().downcast_ref::<&'static str>() {
             if *msg == "No ping response" {
-                eprintln!("Exit: {}", *msg);
+                eprintln!("Exit: Keepalive failed");
                 process::exit(9);
             }
         }
@@ -246,7 +245,7 @@ async fn c2d(callback: &str, dmsg_path: &str, interval: u64, mut client: IoTHubC
         while let Some(cmsg) = recv.recv().await {
             match cmsg {
                 MessageType::C2DMessage(msg) => {
-                    if let Ok(msg_str) = str::from_utf8(&msg.body) {
+                    if let Ok(msg_str) = std::str::from_utf8(&msg.body) {
                         println!("Received: {}", msg_str);
                         match process::Command::new(callback).arg(msg_str).spawn() {
                             Ok(_) => {},
