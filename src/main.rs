@@ -86,6 +86,23 @@ async fn main() -> Result<()> {
             )
         )
 
+        // subcommand: download
+        .subcommand(App::new("download")
+            .about("File download")
+            .arg(Arg::with_name("download file")
+                .short("f").long("download-file")
+                .help("Local path of the download file")
+                .required(true)
+                .takes_value(true)
+            )
+            .arg(Arg::with_name("blob name")
+                .short("b").long("blob-name")
+                .help("Storage blob name")
+                .required(true)
+                .takes_value(true)
+            )
+        )
+
         // options
         .arg(Arg::with_name("iothub name")
            .short("n").long("name")
@@ -141,6 +158,13 @@ async fn main() -> Result<()> {
             let upload_file = sub_m.value_of("upload file").ok_or(anyhow!("No upload file specified"))?;
             let blob_name = sub_m.value_of("blob name").ok_or(anyhow!("No blob name specified"))?;
             upload(&upload_file, &blob_name, &token, &hostname, device_id).await?;
+        },
+
+        // Download file
+        ("download", Some(sub_m)) => {
+            let upload_file = sub_m.value_of("download file").ok_or(anyhow!("No download file specified"))?;
+            let blob_name = sub_m.value_of("blob name").ok_or(anyhow!("No blob name specified"))?;
+            download(&upload_file, &blob_name, &token, &hostname, device_id).await?;
         },
 
         // Show SAS token
@@ -217,6 +241,71 @@ async fn upload(upload_file: &str, blobname: &str, sas_token: &str, hostname: &s
     match status {
         true => Ok(()),
         false => Err(anyhow!("Upload failed"))
+    }
+}
+
+/*
+    Download a file
+ */
+async fn download(dst_file: &str, blobname: &str, sas_token: &str, hostname: &str, device_id: &str) -> Result<()>
+{
+    let client = reqwest::Client::new();
+
+    // Open the local destination file
+    let mut file = fs::File::create(dst_file)?;
+
+    // 1. Init upload
+    let res = client
+        .post(format!("https://{}/devices/{}/files?api-version=2018-06-30", hostname, device_id))
+        .header("Content-Type", "application/json")
+        .header("Authorization", sas_token)
+        .body(json!({"blobName": blobname}).to_string())
+        .send()
+        .await?;
+
+    // Return here if failed
+    if ! res.status().is_success() {
+        return Err(anyhow!(res.text().await?));
+    }
+
+    // Parse response data
+    let v: AzureREST = serde_json::from_str(res.text().await?.as_str())?;
+    println!("Download from https://{}/{}/{}", v.hostName, v.containerName, v.blobName);
+
+    // 2. Download
+    let res = client
+        .get(format!("https://{}/{}/{}{}", v.hostName, v.containerName, v.blobName, v.sasToken))
+        .header("x-ms-date", chrono::Utc::now().to_string())
+        .header("x-ms-version", "2020-10-02")
+        .header("x-ms-blob-type", "BlockBlob")
+        .send()
+        .await?;
+
+    let status = res.status().is_success();
+    if ! status {
+        eprintln!("{}", res.text().await?);
+    } else {
+        let data = res.bytes().await?;
+        file.write_all(&data)?;
+    }
+
+    // 3. Notify completion of upload
+    let res = client
+        .post(format!("https://{}/devices/{}/files/notifications?api-version=2018-06-30", hostname, device_id))
+        .header("Content-Type", "application/json")
+        .header("Authorization", sas_token)
+        .body(json!({"correlationId": v.correlationId, "isSuccess": status}).to_string())
+        .send()
+        .await?;
+
+    if ! res.status().is_success() {
+        eprintln!("{}", res.text().await?);
+    }
+
+    // Result code
+    match status {
+        true => Ok(()),
+        false => Err(anyhow!("Download failed"))
     }
 }
 
