@@ -162,6 +162,7 @@ async fn upload(upload_file: &str, blobname: &str, sas_token: &str, hostname: &s
 {
     let client = reqwest::Client::new();
 
+    // Load upload data
     let mut file = fs::File::open(upload_file)?;
     let mut body = Vec::new();
     file.read_to_end(&mut body)?;
@@ -177,7 +178,7 @@ async fn upload(upload_file: &str, blobname: &str, sas_token: &str, hostname: &s
 
     // Return here if failed
     if ! res.status().is_success() {
-        return Err(anyhow!(res.text().await?.to_string()));
+        return Err(anyhow!(res.text().await?));
     }
 
     // Parse response data
@@ -196,7 +197,7 @@ async fn upload(upload_file: &str, blobname: &str, sas_token: &str, hostname: &s
 
     let status = res.status().is_success();
     if ! status {
-        eprintln!("{}", res.text().await?.to_string());
+        eprintln!("{}", res.text().await?);
     }
 
     // 3. Notify completion of upload
@@ -209,7 +210,7 @@ async fn upload(upload_file: &str, blobname: &str, sas_token: &str, hostname: &s
         .await?;
 
     if ! res.status().is_success() {
-        eprintln!("{}", res.text().await?.to_string());
+        eprintln!("{}", res.text().await?);
     }
 
     // Result code
