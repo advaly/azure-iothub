@@ -202,7 +202,7 @@ async fn upload(upload_file: &str, blobname: &str, sas_token: &str, hostname: &s
 
     // Return here if failed
     if ! res.status().is_success() {
-        return Err(anyhow!(res.text().await?));
+        return Err(anyhow!(response_msg(res).await?));
     }
 
     // Parse response data
@@ -221,7 +221,7 @@ async fn upload(upload_file: &str, blobname: &str, sas_token: &str, hostname: &s
 
     let status = res.status().is_success();
     if ! status {
-        eprintln!("{}", res.text().await?);
+        eprintln!("{}", response_msg(res).await?);
     }
 
     // 3. Notify completion of upload
@@ -234,7 +234,7 @@ async fn upload(upload_file: &str, blobname: &str, sas_token: &str, hostname: &s
         .await?;
 
     if ! res.status().is_success() {
-        eprintln!("{}", res.text().await?);
+        eprintln!("{}", response_msg(res).await?);
     }
 
     // Result code
@@ -265,7 +265,7 @@ async fn download(dst_file: &str, blobname: &str, sas_token: &str, hostname: &st
 
     // Return here if failed
     if ! res.status().is_success() {
-        return Err(anyhow!(res.text().await?));
+        return Err(anyhow!(response_msg(res).await?));
     }
 
     // Parse response data
@@ -283,7 +283,7 @@ async fn download(dst_file: &str, blobname: &str, sas_token: &str, hostname: &st
 
     let status = res.status().is_success();
     if ! status {
-        eprintln!("{}", res.text().await?);
+        eprintln!("{}", response_msg(res).await?);
     } else {
         let data = res.bytes().await?;
         file.write_all(&data)?;
@@ -299,7 +299,7 @@ async fn download(dst_file: &str, blobname: &str, sas_token: &str, hostname: &st
         .await?;
 
     if ! res.status().is_success() {
-        eprintln!("{}", res.text().await?);
+        eprintln!("{}", response_msg(res).await?);
     }
 
     // Result code
@@ -378,4 +378,12 @@ async fn c2d(callback: &str, dmsg_path: &str, interval: u64, mut client: IoTHubC
     tokio::join!(receive_loop, send_loop);
 
     Ok(())
+}
+
+/*
+    Get print string from http response (for error)
+ */
+async fn response_msg(res: reqwest::Response) -> Result<String>
+{
+    Ok(format!("{} {}", res.status(), res.text().await?))
 }

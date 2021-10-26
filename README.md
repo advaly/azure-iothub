@@ -5,6 +5,7 @@ Azure IoT-Hub client.
 - Listen cloud to device message
 - Send device to cloud message
 - Upload file
+- Download file
 
 ## Example
 
@@ -20,6 +21,13 @@ $ azure-iothub --device-id device1 --name test-iothub c2d -c ./cb.sh
 ```
 $ export SHARED_ACCESS_KEY=XXXXX
 $ azure-iothub --device-id device1 --name test-iothub upload -b test.dat -f ./test.dat
+```
+
+### Download file
+
+```
+$ export SHARED_ACCESS_KEY=XXXXX
+$ azure-iothub --device-id device1 --name test-iothub download -b test.dat -f ./test.dat
 ```
 
 ### Show SAS
