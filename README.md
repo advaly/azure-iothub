@@ -16,6 +16,15 @@ $ export SHARED_ACCESS_KEY=XXXXX
 $ azure-iothub --device-id device1 --name test-iothub c2d -c ./cb.sh
 ```
 
+The callback function is called with recieved message from cloud as an argument.
+
+### D2C
+
+```
+$ export SHARED_ACCESS_KEY=XXXXX
+$ azure-iothub --device-id device1 --name test-iothub d2c -m "hello world!"
+```
+
 ### Upload file
 
 ```

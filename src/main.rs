@@ -1,6 +1,5 @@
 use azure_iot_sdk::{DeviceKeyTokenSource, TokenSource, IoTHubClient, MessageType, message::Message};
 
-use tokio::time::{sleep, Duration};
 use clap::{App, Arg};
 use env_logger;
 use chrono;
@@ -51,21 +50,21 @@ async fn main() -> Result<()> {
             .after_help("The process will exit with eixt code 9 when no ping response from server.")
             .arg(Arg::with_name("callback")
                 .short("c").long("callback-command")
-                .help("Callback command on c2d message")
+                .help("Callback command on c2d message. \
+                    stdout of the command is sent to cloud as device message")
                 .required(true)
                 .takes_value(true)
             )
+        )
+
+        // subcommand: d2c
+        .subcommand(App::new("d2c")
+            .about("Send a device to cloud message")
             .arg(Arg::with_name("message")
-                .short("m").long("message-file")
-                .help("Watch file for message to cloud. \
-                    A new massage will be sent when the contents of this file was changed")
+                .short("m").long("message")
+                .help("Send a device message to cloud")
+                .required(true)
                 .takes_value(true)
-            )
-            .arg(Arg::with_name("interval")
-                .short("i").long("interval")
-                .help("Check intervel time in seconds of the message to cloud")
-                .takes_value(true)
-                .default_value("60")
             )
         )
 
@@ -143,14 +142,23 @@ async fn main() -> Result<()> {
         // c2d
         ("c2d", Some(sub_m)) => {
             let callback = sub_m.value_of("callback").ok_or(anyhow!("No callback command specified"))?;
-            let message = sub_m.value_of("message").unwrap_or("");
-            let interval = sub_m.value_of("interval").unwrap_or("60").parse::<u64>().unwrap_or(60);
             let client =
                 match IoTHubClient::new(&hostname, device_id.into(), token_source).await {
                     Ok(c) => c,
                     Err(e) => { return Err(anyhow!("{}", e)); }
                 };
-            c2d(callback, message, interval, client).await?;
+            c2d(callback, client).await?;
+        },
+
+        // d2c
+        ("d2c", Some(sub_m)) => {
+            let message = sub_m.value_of("message").ok_or(anyhow!("No message specified"))?;
+            let client =
+                match IoTHubClient::new(&hostname, device_id.into(), token_source).await {
+                    Ok(c) => c,
+                    Err(e) => { return Err(anyhow!("{}", e)); }
+                };
+            d2c(message, client).await?;
         },
 
         // Upload file
@@ -310,9 +318,9 @@ async fn download(dst_file: &str, blobname: &str, sas_token: &str, hostname: &st
 }
 
 /*
-    C2D
+    C2D, Cloud to device message
  */
-async fn c2d(callback: &str, dmsg_path: &str, interval: u64, mut client: IoTHubClient) -> Result<()>
+async fn c2d(callback: &str, mut client: IoTHubClient) -> Result<()>
 {
     // Set panic handler
     let orig_hook = panic::take_hook();
@@ -331,53 +339,55 @@ async fn c2d(callback: &str, dmsg_path: &str, interval: u64, mut client: IoTHubC
 
     // Cloud to device message
     let mut recv = client.get_receiver().await;
-    let receive_loop = async {
-        while let Some(cmsg) = recv.recv().await {
-            match cmsg {
-                MessageType::C2DMessage(msg) => {
-                    if let Ok(msg_str) = std::str::from_utf8(&msg.body) {
-                        println!("Received: {}", msg_str);
-                        match process::Command::new(callback).arg(msg_str).spawn() {
-                            Ok(_) => {},
-                            Err(e) => { eprintln!("Error: {:?}", e) },
+    while let Some(cmsg) = recv.recv().await {
+        match cmsg {
+            MessageType::C2DMessage(msg) => {
+                if let Ok(msg_str) = std::str::from_utf8(&msg.body) {
+                    println!("Received: {}", msg_str);
+                    let resstr = match process::Command::new(callback).arg(msg_str).output() {
+                        Ok(output) => {
+                            std::str::from_utf8(&output.stdout).unwrap_or("unwrap error").to_string()
+                        },
+                        Err(e) => { 
+                            eprintln!("Error: {:?}", e);
+                            String::from("command error")
                         }
-                    }
-                },
-                _ => {}
-            }
-        }
-    };
-
-    // Device to cloud message
-    let send_loop = async {
-        let mut dmsg = String::from("");
-        loop {
-            sleep(Duration::from_secs(interval)).await;
-
-            // Read message from file
-            let cur_msg = match fs::read_to_string(dmsg_path) {
-                Ok(s) => s.trim().replace('\n', ""),
-                Err(_) => continue
-            };
-
-            // Send if message is different from provious
-            if dmsg != cur_msg {
-                dmsg = cur_msg;
-                let msg = Message::builder()
-                    .set_body(vec![])
-                    .add_message_property(String::from("message"), dmsg.clone())
-                    .build();
-                match client.send_message(msg).await {
-                    Ok(_) => println!("Sent: {}", dmsg),
-                    Err(e) => eprintln!("Error: {}", e)
+                    };
+                    d2c(resstr, client.clone()).await.unwrap_or(());
                 }
-            }
+            },
+            _ => {}
         }
-    };
-
-    tokio::join!(receive_loop, send_loop);
+    }
 
     Ok(())
+}
+
+/*
+    D2C, Device to cloud Message
+ */
+async fn d2c(message: impl Into<String>, mut client: IoTHubClient) -> Result<()>
+{
+    let msg_string: String = message.into()
+        .trim()
+        .replace('\n', "")
+        .replace(' ', "_");
+
+    let msg = Message::builder()
+        .set_body(vec![])
+        .add_message_property(String::from("message"), msg_string.clone())
+        .build();
+
+    match client.send_message(msg).await {
+        Ok(_) => {
+            println!("Sent: {}", msg_string);
+            Ok(())
+        },
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            Err(anyhow!("{}", e))
+        }
+    }
 }
 
 /*
