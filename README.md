@@ -22,7 +22,7 @@ The callback function is called with recieved message from cloud as an argument.
 
 ```
 $ export SHARED_ACCESS_KEY=XXXXX
-$ azure-iothub --device-id device1 --name test-iothub d2c -m "hello world!"
+$ azure-iothub --device-id device1 --name test-iothub d2c -b "hello world!"
 ```
 
 ### Upload file
