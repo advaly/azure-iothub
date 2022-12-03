@@ -1,6 +1,6 @@
 [package]
 name = "azure-iothub"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
 reqwest = { version = "0.11", features = ["native-tls"] }
-tokio = "1.12"
+tokio = "1.22"
 clap = "2.33"
 env_logger = "0.9"
 chrono = "0.4"

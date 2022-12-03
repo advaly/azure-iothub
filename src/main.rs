@@ -63,13 +63,7 @@ async fn main() -> Result<()> {
             .arg(Arg::with_name("body")
                 .short("b").long("body")
                 .help("Send a device message to cloud")
-                .default_value("")
-                .takes_value(true)
-            )
-            .arg(Arg::with_name("message")
-                .short("m").long("message")
-                .help("Send a device message to cloud as a property 'message'")
-                .default_value("")
+                .required(true)
                 .takes_value(true)
             )
         )
@@ -159,13 +153,12 @@ async fn main() -> Result<()> {
         // d2c
         ("d2c", Some(sub_m)) => {
             let body = sub_m.value_of("body").unwrap();
-            let message = sub_m.value_of("message").unwrap();
             let client =
                 match IoTHubClient::new(&hostname, device_id.into(), token_source).await {
                     Ok(c) => c,
                     Err(e) => { return Err(anyhow!("{}", e)); }
                 };
-            d2c(body, message, client).await?;
+            d2c(body, client).await?;
         },
 
         // Upload file
@@ -360,7 +353,7 @@ async fn c2d(callback: &str, mut client: IoTHubClient) -> Result<()>
                             String::from("command error")
                         }
                     };
-                    d2c(resstr.clone(), resstr, client.clone()).await.unwrap_or(());
+                    d2c(resstr, client.clone()).await.unwrap_or(());
                 }
             },
             _ => {}
@@ -373,21 +366,19 @@ async fn c2d(callback: &str, mut client: IoTHubClient) -> Result<()>
 /*
     D2C, Device to cloud Message
  */
-async fn d2c(body: impl Into<String>, message: impl Into<String>, mut client: IoTHubClient) -> Result<()>
+async fn d2c(body: impl Into<String>, mut client: IoTHubClient) -> Result<()>
 {
     let body_string: String = body.into().trim().to_string();
-    let msg_string: String = message.into().trim().replace('\n', "").replace(' ', "_");
 
     let msg = Message::builder()
         .set_body(body_string.as_bytes().to_vec())
         .set_content_type("application/json".to_owned())
         .set_content_encoding("utf-8".to_owned())
-        .add_message_property("message".to_owned(), msg_string.clone())
         .build();
 
     match client.send_message(msg).await {
         Ok(_) => {
-            println!("Sent: body '{}', property 'message:{}'", body_string, msg_string);
+            println!("Sent: body '{}'", body_string);
             Ok(())
         },
         Err(e) => {
