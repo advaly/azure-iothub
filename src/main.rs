@@ -1,7 +1,6 @@
 use azure_iot_sdk::{DeviceKeyTokenSource, TokenSource, IoTHubClient, MessageType, message::Message};
 
 use clap::{App, Arg};
-use env_logger;
 use chrono;
 use reqwest;
 use anyhow::{anyhow, Result};
@@ -30,8 +29,6 @@ struct AzureREST {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
-
     // Parse command line arguments
     let args = App::new("azure-iothub")
         // headers
