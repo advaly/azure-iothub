@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
             .about("Send a device to cloud message")
             .arg(Arg::with_name("body")
                 .short("b").long("body")
-                .help("Send a device message to cloud")
+                .help("message body in JSON format")
                 .required(true)
                 .takes_value(true)
             )
