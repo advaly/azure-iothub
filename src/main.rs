@@ -63,6 +63,10 @@ async fn main() -> Result<()> {
                 .required(true)
                 .takes_value(true)
             )
+            .arg(Arg::with_name("text")
+                .short("t").long("text")
+                .help("set message content type to text/plain")
+            )
         )
 
         // subcommand: upload
@@ -150,12 +154,13 @@ async fn main() -> Result<()> {
         // d2c
         ("d2c", Some(sub_m)) => {
             let body = sub_m.value_of("body").unwrap();
+            let is_text = sub_m.is_present("text");
             let client =
                 match IoTHubClient::new(&hostname, device_id.into(), token_source).await {
                     Ok(c) => c,
                     Err(e) => { return Err(anyhow!("{}", e)); }
                 };
-            d2c(body, client).await?;
+            d2c(body, is_text, client).await?;
         },
 
         // Upload file
@@ -350,7 +355,7 @@ async fn c2d(callback: &str, mut client: IoTHubClient) -> Result<()>
                             String::from("command error")
                         }
                     };
-                    d2c(resstr, client.clone()).await.unwrap_or(());
+                    d2c(resstr, false, client.clone()).await.unwrap_or(());
                 }
             },
             _ => {}
@@ -363,13 +368,14 @@ async fn c2d(callback: &str, mut client: IoTHubClient) -> Result<()>
 /*
     D2C, Device to cloud Message
  */
-async fn d2c(body: impl Into<String>, mut client: IoTHubClient) -> Result<()>
+async fn d2c(body: impl Into<String>, is_text: bool, mut client: IoTHubClient) -> Result<()>
 {
     let body_string: String = body.into().trim().to_string();
+    let content_type = if is_text { "text/plain" } else { "application/json" };
 
     let msg = Message::builder()
         .set_body(body_string.as_bytes().to_vec())
-        .set_content_type("application/json".to_owned())
+        .set_content_type(content_type.to_owned())
         .set_content_encoding("utf-8".to_owned())
         .build();
 
